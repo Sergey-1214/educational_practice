@@ -31,3 +31,10 @@ class Base(DeclarativeBase):
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     async with async_session_factory() as session:
         yield session
+
+
+async def create_tables() -> None:
+    import app.modules.auth.models  # noqa: F401
+
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)

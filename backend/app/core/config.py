@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     postgres_password: str = "postgres"
     postgres_db: str = "educational_practice"
     postgres_echo: bool = False
+    secret_key: str = "change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
 
     @property
     def sqlalchemy_database_url(self) -> str:

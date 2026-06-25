@@ -25,3 +25,11 @@ class SearchHistoryRead(BaseModel):
 class SearchHistoryListResponse(BaseModel):
     items: list[SearchHistoryRead]
     total: int
+
+
+class SearchHistoryDeleteResponse(BaseModel):
+    deleted: bool
+
+
+class SearchHistoryClearResponse(BaseModel):
+    deleted_count: int

@@ -33,3 +33,4 @@ Copy-Item backend/.env.example backend/.env
 - The FastAPI app creates database tables on startup in the current implementation.
 - The backend reads configuration from environment variables and supports `DATABASE_URL`.
 - For production, it is better to switch table creation to Alembic migrations instead of startup auto-create.
+- GitHub Actions runs backend linting, tests, and image build for changes in `backend/**` on `master` and `dev`.

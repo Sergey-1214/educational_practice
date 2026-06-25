@@ -81,3 +81,30 @@ class ElasticsearchRepository:
         response = await self.client.bulk(operations=operations, refresh=True)
         if response.get("errors"):
             raise RuntimeError("Failed to index document chunks")
+
+    async def search_documents(
+        self,
+        query: str,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        await self.ensure_documents_index()
+        return await self.client.search(
+            index=self.index_name,
+            query={
+                "multi_match": {
+                    "query": query,
+                    "fields": ["text"],
+                },
+            },
+            highlight={
+                "fields": {
+                    "text": {
+                        "pre_tags": ["<mark>"],
+                        "post_tags": ["</mark>"],
+                    },
+                },
+            },
+            from_=offset,
+            size=limit,
+        )

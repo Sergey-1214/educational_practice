@@ -85,6 +85,7 @@ class ElasticsearchRepository:
     async def search_documents(
         self,
         query: str,
+        user_id: str,
         document_id: str | None = None,
         limit: int = 10,
         offset: int = 0,
@@ -92,7 +93,7 @@ class ElasticsearchRepository:
         await self.ensure_documents_index()
         return await self.client.search(
             index=self.index_name,
-            query=self._build_search_query(query, document_id),
+            query=self._build_search_query(query, user_id, document_id),
             highlight={
                 "fields": {
                     "text": {
@@ -108,6 +109,7 @@ class ElasticsearchRepository:
     @staticmethod
     def _build_search_query(
         query: str,
+        user_id: str,
         document_id: str | None,
     ) -> dict[str, Any]:
         text_query = {
@@ -116,18 +118,25 @@ class ElasticsearchRepository:
                 "fields": ["text"],
             },
         }
-        if document_id is None:
-            return text_query
+        filters: list[dict[str, Any]] = [
+            {
+                "term": {
+                    "user_id": user_id,
+                },
+            },
+        ]
+        if document_id is not None:
+            filters.append(
+                {
+                    "term": {
+                        "document_id": document_id,
+                    },
+                },
+            )
 
         return {
             "bool": {
                 "must": [text_query],
-                "filter": [
-                    {
-                        "term": {
-                            "document_id": document_id,
-                        },
-                    },
-                ],
+                "filter": filters,
             },
         }

@@ -37,6 +37,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
 async def create_tables(max_attempts: int = 10, delay_seconds: int = 2) -> None:
     import app.modules.auth.models  # noqa: F401
     import app.modules.documents.models  # noqa: F401
+    import app.modules.history.models  # noqa: F401
 
     for attempt in range(1, max_attempts + 1):
         try:

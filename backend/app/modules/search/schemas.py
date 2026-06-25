@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -12,6 +14,10 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str = Field(description="Search query text.")
+    document_id: UUID | None = Field(
+        default=None,
+        description="Document identifier used to limit the search scope.",
+    )
     items: list[SearchResult] = Field(description="Search results for the current page.")
     total: int = Field(description="Total number of found results.")
     limit: int = Field(description="Maximum number of results returned in this response.")
@@ -23,6 +29,10 @@ class SearchParams(BaseModel):
         min_length=1,
         max_length=300,
         description="Search query text entered by the user.",
+    )
+    document_id: UUID | None = Field(
+        default=None,
+        description="Search only inside this document when provided.",
     )
     limit: int = Field(
         default=10,

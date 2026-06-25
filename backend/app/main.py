@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.v1.router import api_router
+from app.db.elasticsearch import close_elasticsearch
 from app.db.postgres import create_tables
 
 
@@ -11,6 +12,7 @@ from app.db.postgres import create_tables
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     await create_tables()
     yield
+    await close_elasticsearch()
 
 
 app = FastAPI(

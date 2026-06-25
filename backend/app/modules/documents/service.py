@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.documents.models import Document
 from app.modules.documents.chunker import split_text_into_chunks
 from app.modules.documents.parser import (
     DOCX_CONTENT_TYPE,
@@ -16,6 +17,7 @@ from app.modules.documents.schemas import (
     DocumentsListResponse,
     DocumentUploadResponse,
 )
+from app.modules.search.elastic_repository import ElasticsearchRepository
 
 
 MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024
@@ -26,6 +28,7 @@ class DocumentsService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.repository = DocumentsRepository(session)
+        self.elasticsearch_repository = ElasticsearchRepository()
 
     async def upload_document(
         self,
@@ -48,10 +51,11 @@ class DocumentsService:
         await self.repository.mark_as_processing(document.id)
 
         try:
-            chunks_count = self._count_chunks(content, document.content_type)
+            chunks = self._build_chunks(document, content)
+            await self.elasticsearch_repository.index_document_chunks(chunks)
             document = await self.repository.mark_as_processed(
                 document.id,
-                chunks_count=chunks_count,
+                chunks_count=len(chunks),
             )
             await self.session.commit()
             await self.session.refresh(document)
@@ -92,16 +96,33 @@ class DocumentsService:
         return DocumentsListResponse(items=documents, total=total)
 
     @staticmethod
-    def _count_chunks(content: bytes, content_type: str) -> int:
-        pages = parse_document(content, content_type)
-        chunks_count = sum(
-            len(split_text_into_chunks(page.text))
-            for page in pages
-        )
-        if chunks_count == 0:
+    def _build_chunks(
+        document: Document,
+        content: bytes,
+    ) -> list[dict[str, str | int | None]]:
+        pages = parse_document(content, document.content_type)
+        chunks: list[dict[str, str | int | None]] = []
+
+        for page in pages:
+            page_chunks = split_text_into_chunks(page.text)
+            for index, text in enumerate(page_chunks, start=1):
+                chunk_id = f"{document.id}:{page.page_number}:{index}"
+                chunks.append(
+                    {
+                        "chunk_id": chunk_id,
+                        "document_id": str(document.id),
+                        "user_id": str(document.user_id) if document.user_id else None,
+                        "file_name": document.file_name,
+                        "page_number": page.page_number,
+                        "chunk_number": index,
+                        "text": text,
+                    },
+                )
+
+        if not chunks:
             raise ValueError("Document does not contain extractable text")
 
-        return chunks_count
+        return chunks
 
     @staticmethod
     def _validate_content_type(content_type: str | None) -> None:

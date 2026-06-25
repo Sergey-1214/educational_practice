@@ -1,8 +1,11 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.dependencies import get_current_user, get_db_session
+from app.modules.auth.models import User
 from app.modules.search.schemas import SearchParams, SearchResponse
 from app.modules.search.service import SearchService
 
@@ -20,6 +23,8 @@ async def search_documents(
             examples=["учебная практика"],
         ),
     ],
+    session: Annotated[AsyncSession, Depends(get_db_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
     document_id: Annotated[
         UUID | None,
         Query(
@@ -45,7 +50,7 @@ async def search_documents(
         ),
     ] = 0,
 ) -> SearchResponse:
-    service = SearchService()
+    service = SearchService(session)
     return await service.search(
         SearchParams(
             query=q,
@@ -53,4 +58,5 @@ async def search_documents(
             limit=limit,
             offset=offset,
         ),
+        user_id=current_user.id,
     )

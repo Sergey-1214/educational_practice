@@ -85,18 +85,14 @@ class ElasticsearchRepository:
     async def search_documents(
         self,
         query: str,
+        document_id: str | None = None,
         limit: int = 10,
         offset: int = 0,
     ) -> dict[str, Any]:
         await self.ensure_documents_index()
         return await self.client.search(
             index=self.index_name,
-            query={
-                "multi_match": {
-                    "query": query,
-                    "fields": ["text"],
-                },
-            },
+            query=self._build_search_query(query, document_id),
             highlight={
                 "fields": {
                     "text": {
@@ -108,3 +104,30 @@ class ElasticsearchRepository:
             from_=offset,
             size=limit,
         )
+
+    @staticmethod
+    def _build_search_query(
+        query: str,
+        document_id: str | None,
+    ) -> dict[str, Any]:
+        text_query = {
+            "multi_match": {
+                "query": query,
+                "fields": ["text"],
+            },
+        }
+        if document_id is None:
+            return text_query
+
+        return {
+            "bool": {
+                "must": [text_query],
+                "filter": [
+                    {
+                        "term": {
+                            "document_id": document_id,
+                        },
+                    },
+                ],
+            },
+        }

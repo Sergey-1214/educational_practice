@@ -4,13 +4,17 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.documents.repository import DocumentsRepository
+from app.modules.history.repository import SearchHistoryRepository
+from app.modules.history.schemas import SearchHistoryCreate
 from app.modules.search.elastic_repository import ElasticsearchRepository
 from app.modules.search.schemas import SearchParams, SearchResponse, SearchResult
 
 
 class SearchService:
     def __init__(self, session: AsyncSession) -> None:
+        self.session = session
         self.documents_repository = DocumentsRepository(session)
+        self.history_repository = SearchHistoryRepository(session)
         self.repository = ElasticsearchRepository()
 
     async def search(self, params: SearchParams, user_id: UUID) -> SearchResponse:
@@ -37,6 +41,15 @@ class SearchService:
             self._build_result(hit)
             for hit in hits.get("hits", [])
         ]
+        await self.history_repository.create_history_item(
+            SearchHistoryCreate(
+                user_id=user_id,
+                query=params.query,
+                document_id=params.document_id,
+                results_count=total,
+            ),
+        )
+        await self.session.commit()
 
         return SearchResponse(
             query=params.query,

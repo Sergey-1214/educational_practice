@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Query
 
@@ -19,6 +20,13 @@ async def search_documents(
             examples=["учебная практика"],
         ),
     ],
+    document_id: Annotated[
+        UUID | None,
+        Query(
+            description="Search only inside this document when provided.",
+            examples=["550e8400-e29b-41d4-a716-446655440000"],
+        ),
+    ] = None,
     limit: Annotated[
         int,
         Query(
@@ -41,6 +49,7 @@ async def search_documents(
     return await service.search(
         SearchParams(
             query=q,
+            document_id=document_id,
             limit=limit,
             offset=offset,
         ),

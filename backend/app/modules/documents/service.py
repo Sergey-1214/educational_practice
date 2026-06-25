@@ -1,0 +1,146 @@
+from uuid import UUID
+
+from fastapi import HTTPException, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.documents.models import Document
+from app.modules.documents.chunker import split_text_into_chunks
+from app.modules.documents.parser import (
+    DOCX_CONTENT_TYPE,
+    PDF_CONTENT_TYPE,
+    UnsupportedDocumentTypeError,
+    parse_document,
+)
+from app.modules.documents.repository import DocumentsRepository
+from app.modules.documents.schemas import (
+    DocumentCreate,
+    DocumentsListResponse,
+    DocumentUploadResponse,
+)
+from app.modules.search.elastic_repository import ElasticsearchRepository
+
+
+MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024
+SUPPORTED_CONTENT_TYPES = {PDF_CONTENT_TYPE, DOCX_CONTENT_TYPE}
+
+
+class DocumentsService:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.repository = DocumentsRepository(session)
+        self.elasticsearch_repository = ElasticsearchRepository()
+
+    async def upload_document(
+        self,
+        file: UploadFile,
+        user_id: UUID | None = None,
+    ) -> DocumentUploadResponse:
+        self._validate_content_type(file.content_type)
+
+        content = await file.read()
+        self._validate_file_content(content)
+
+        document = await self.repository.create_document(
+            DocumentCreate(
+                file_name=file.filename or "document",
+                content_type=file.content_type or "",
+                size_bytes=len(content),
+                user_id=user_id,
+            ),
+        )
+        await self.repository.mark_as_processing(document.id)
+
+        try:
+            chunks = self._build_chunks(document, content)
+            await self.elasticsearch_repository.index_document_chunks(chunks)
+            document = await self.repository.mark_as_processed(
+                document.id,
+                chunks_count=len(chunks),
+            )
+            await self.session.commit()
+            await self.session.refresh(document)
+        except (UnsupportedDocumentTypeError, ValueError) as exc:
+            document = await self.repository.mark_as_failed(document.id, str(exc))
+            await self.session.commit()
+            await self.session.refresh(document)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        except Exception as exc:
+            document = await self.repository.mark_as_failed(
+                document.id,
+                "Failed to process document",
+            )
+            await self.session.commit()
+            await self.session.refresh(document)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process document",
+            ) from exc
+
+        return DocumentUploadResponse(document=document)
+
+    async def list_documents(
+        self,
+        user_id: UUID,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> DocumentsListResponse:
+        documents = await self.repository.list_documents(
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+        )
+        total = await self.repository.count_documents(user_id=user_id)
+        return DocumentsListResponse(items=documents, total=total)
+
+    @staticmethod
+    def _build_chunks(
+        document: Document,
+        content: bytes,
+    ) -> list[dict[str, str | int | None]]:
+        pages = parse_document(content, document.content_type)
+        chunks: list[dict[str, str | int | None]] = []
+
+        for page in pages:
+            page_chunks = split_text_into_chunks(page.text)
+            for index, text in enumerate(page_chunks, start=1):
+                chunk_id = f"{document.id}:{page.page_number}:{index}"
+                chunks.append(
+                    {
+                        "chunk_id": chunk_id,
+                        "document_id": str(document.id),
+                        "user_id": str(document.user_id) if document.user_id else None,
+                        "file_name": document.file_name,
+                        "page_number": page.page_number,
+                        "chunk_number": index,
+                        "text": text,
+                    },
+                )
+
+        if not chunks:
+            raise ValueError("Document does not contain extractable text")
+
+        return chunks
+
+    @staticmethod
+    def _validate_content_type(content_type: str | None) -> None:
+        if content_type not in SUPPORTED_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only PDF and DOCX files are supported",
+            )
+
+    @staticmethod
+    def _validate_file_content(content: bytes) -> None:
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File is empty",
+            )
+        if len(content) > MAX_DOCUMENT_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File size must not exceed 20 MB",
+            )

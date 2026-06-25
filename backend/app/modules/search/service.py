@@ -12,6 +12,7 @@ class SearchService:
         try:
             response = await self.repository.search_documents(
                 query=params.query,
+                document_id=str(params.document_id) if params.document_id else None,
                 limit=params.limit,
                 offset=params.offset,
             )
@@ -30,6 +31,7 @@ class SearchService:
 
         return SearchResponse(
             query=params.query,
+            document_id=params.document_id,
             items=items,
             total=total,
             limit=params.limit,

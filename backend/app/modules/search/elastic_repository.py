@@ -106,6 +106,34 @@ class ElasticsearchRepository:
             size=limit,
         )
 
+    async def delete_document_chunks(
+        self,
+        document_id: str,
+        user_id: str,
+    ) -> None:
+        await self.ensure_documents_index()
+        await self.client.delete_by_query(
+            index=self.index_name,
+            query={
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "document_id": document_id,
+                            },
+                        },
+                        {
+                            "term": {
+                                "user_id": user_id,
+                            },
+                        },
+                    ],
+                },
+            },
+            refresh=True,
+            conflicts="proceed",
+        )
+
     @staticmethod
     def _build_search_query(
         query: str,

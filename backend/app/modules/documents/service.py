@@ -1,8 +1,9 @@
 from uuid import UUID
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.postgres import async_session_factory
 from app.modules.documents.models import Document
 from app.modules.documents.chunker import split_text_into_chunks
 from app.modules.documents.parser import (
@@ -14,6 +15,8 @@ from app.modules.documents.parser import (
 from app.modules.documents.repository import DocumentsRepository
 from app.modules.documents.schemas import (
     DocumentCreate,
+    DocumentDeleteResponse,
+    DocumentRead,
     DocumentsListResponse,
     DocumentUploadResponse,
 )
@@ -33,6 +36,7 @@ class DocumentsService:
     async def upload_document(
         self,
         file: UploadFile,
+        background_tasks: BackgroundTasks,
         user_id: UUID | None = None,
     ) -> DocumentUploadResponse:
         self._validate_content_type(file.content_type)
@@ -48,36 +52,11 @@ class DocumentsService:
                 user_id=user_id,
             ),
         )
-        await self.repository.mark_as_processing(document.id)
+        document = await self.repository.mark_as_processing(document.id)
+        await self.session.commit()
+        await self.session.refresh(document)
 
-        try:
-            chunks = self._build_chunks(document, content)
-            await self.elasticsearch_repository.index_document_chunks(chunks)
-            document = await self.repository.mark_as_processed(
-                document.id,
-                chunks_count=len(chunks),
-            )
-            await self.session.commit()
-            await self.session.refresh(document)
-        except (UnsupportedDocumentTypeError, ValueError) as exc:
-            document = await self.repository.mark_as_failed(document.id, str(exc))
-            await self.session.commit()
-            await self.session.refresh(document)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except Exception as exc:
-            document = await self.repository.mark_as_failed(
-                document.id,
-                "Failed to process document",
-            )
-            await self.session.commit()
-            await self.session.refresh(document)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to process document",
-            ) from exc
+        background_tasks.add_task(process_document, document.id, content)
 
         return DocumentUploadResponse(document=document)
 
@@ -94,6 +73,58 @@ class DocumentsService:
         )
         total = await self.repository.count_documents(user_id=user_id)
         return DocumentsListResponse(items=documents, total=total)
+
+    async def get_document(
+        self,
+        document_id: UUID,
+        user_id: UUID,
+    ) -> DocumentRead:
+        document = await self.repository.get_document_by_id(document_id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
+        if document.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document",
+            )
+
+        return DocumentRead.model_validate(document)
+
+    async def delete_document(
+        self,
+        document_id: UUID,
+        user_id: UUID,
+    ) -> DocumentDeleteResponse:
+        document = await self.repository.get_document_by_id(document_id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
+        if document.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document",
+            )
+
+        try:
+            await self.elasticsearch_repository.delete_document_chunks(
+                document_id=str(document.id),
+                user_id=str(user_id),
+            )
+            await self.repository.delete_document(document)
+            await self.session.commit()
+        except Exception as exc:
+            await self.session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete document",
+            ) from exc
+
+        return DocumentDeleteResponse(deleted=True)
 
     @staticmethod
     def _build_chunks(
@@ -144,3 +175,29 @@ class DocumentsService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File size must not exceed 20 MB",
             )
+
+
+async def process_document(document_id: UUID, content: bytes) -> None:
+    async with async_session_factory() as session:
+        service = DocumentsService(session)
+        document = await service.repository.get_document_by_id(document_id)
+        if document is None:
+            return
+
+        try:
+            chunks = service._build_chunks(document, content)
+            await service.elasticsearch_repository.index_document_chunks(chunks)
+            await service.repository.mark_as_processed(
+                document.id,
+                chunks_count=len(chunks),
+            )
+            await session.commit()
+        except (UnsupportedDocumentTypeError, ValueError) as exc:
+            await service.repository.mark_as_failed(document.id, str(exc))
+            await session.commit()
+        except Exception:
+            await service.repository.mark_as_failed(
+                document.id,
+                "Failed to process document",
+            )
+            await session.commit()

@@ -15,6 +15,10 @@ from app.modules.history.service import SearchHistoryService
 
 router = APIRouter(prefix="/history", tags=["history"])
 
+AUTH_RESPONSES = {
+    401: {"description": "Invalid or missing access token."},
+}
+
 
 def get_history_service(
     session: Annotated[AsyncSession, Depends(get_db_session)],
@@ -22,7 +26,15 @@ def get_history_service(
     return SearchHistoryService(session)
 
 
-@router.get("", response_model=SearchHistoryListResponse)
+@router.get(
+    "",
+    response_model=SearchHistoryListResponse,
+    responses={
+        200: {"description": "Current user's search history returned successfully."},
+        **AUTH_RESPONSES,
+        422: {"description": "Invalid pagination query parameters."},
+    },
+)
 async def get_history(
     current_user: Annotated[User, Depends(get_current_user)],
     history_service: Annotated[SearchHistoryService, Depends(get_history_service)],
@@ -51,7 +63,16 @@ async def get_history(
     )
 
 
-@router.delete("/{history_item_id}", response_model=SearchHistoryDeleteResponse)
+@router.delete(
+    "/{history_item_id}",
+    response_model=SearchHistoryDeleteResponse,
+    responses={
+        200: {"description": "History item deleted successfully."},
+        **AUTH_RESPONSES,
+        404: {"description": "History item not found."},
+        422: {"description": "Invalid history item id."},
+    },
+)
 async def delete_history_item(
     history_item_id: UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -63,7 +84,14 @@ async def delete_history_item(
     )
 
 
-@router.delete("", response_model=SearchHistoryClearResponse)
+@router.delete(
+    "",
+    response_model=SearchHistoryClearResponse,
+    responses={
+        200: {"description": "Current user's search history cleared successfully."},
+        **AUTH_RESPONSES,
+    },
+)
 async def clear_history(
     current_user: Annotated[User, Depends(get_current_user)],
     history_service: Annotated[SearchHistoryService, Depends(get_history_service)],

@@ -12,7 +12,18 @@ from app.modules.search.service import SearchService
 router = APIRouter(prefix="/search", tags=["search"])
 
 
-@router.get("", response_model=SearchResponse)
+@router.get(
+    "",
+    response_model=SearchResponse,
+    responses={
+        200: {"description": "Search completed successfully."},
+        401: {"description": "Invalid or missing access token."},
+        403: {"description": "Search inside a document that belongs to another user."},
+        404: {"description": "Document filter points to a missing document."},
+        422: {"description": "Invalid search query, document id, limit, or offset."},
+        500: {"description": "Elasticsearch search failed."},
+    },
+)
 async def search_documents(
     q: Annotated[
         str,

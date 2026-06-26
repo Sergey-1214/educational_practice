@@ -14,6 +14,7 @@ from app.modules.documents.parser import (
 from app.modules.documents.repository import DocumentsRepository
 from app.modules.documents.schemas import (
     DocumentCreate,
+    DocumentDeleteResponse,
     DocumentRead,
     DocumentsListResponse,
     DocumentUploadResponse,
@@ -114,6 +115,39 @@ class DocumentsService:
             )
 
         return DocumentRead.model_validate(document)
+
+    async def delete_document(
+        self,
+        document_id: UUID,
+        user_id: UUID,
+    ) -> DocumentDeleteResponse:
+        document = await self.repository.get_document_by_id(document_id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
+        if document.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document",
+            )
+
+        try:
+            await self.elasticsearch_repository.delete_document_chunks(
+                document_id=str(document.id),
+                user_id=str(user_id),
+            )
+            await self.repository.delete_document(document)
+            await self.session.commit()
+        except Exception as exc:
+            await self.session.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete document",
+            ) from exc
+
+        return DocumentDeleteResponse(deleted=True)
 
     @staticmethod
     def _build_chunks(

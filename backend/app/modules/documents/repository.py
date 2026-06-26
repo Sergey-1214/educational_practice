@@ -23,6 +23,10 @@ class DocumentsRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def delete_document(self, document: Document) -> None:
+        await self.session.delete(document)
+        await self.session.flush()
+
     async def list_documents(
         self,
         user_id: UUID,

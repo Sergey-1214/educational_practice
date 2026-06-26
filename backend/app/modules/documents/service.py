@@ -14,6 +14,7 @@ from app.modules.documents.parser import (
 from app.modules.documents.repository import DocumentsRepository
 from app.modules.documents.schemas import (
     DocumentCreate,
+    DocumentRead,
     DocumentsListResponse,
     DocumentUploadResponse,
 )
@@ -94,6 +95,25 @@ class DocumentsService:
         )
         total = await self.repository.count_documents(user_id=user_id)
         return DocumentsListResponse(items=documents, total=total)
+
+    async def get_document(
+        self,
+        document_id: UUID,
+        user_id: UUID,
+    ) -> DocumentRead:
+        document = await self.repository.get_document_by_id(document_id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found",
+            )
+        if document.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this document",
+            )
+
+        return DocumentRead.model_validate(document)
 
     @staticmethod
     def _build_chunks(

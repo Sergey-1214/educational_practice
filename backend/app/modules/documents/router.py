@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.dependencies import get_current_user, get_db_session
 from app.modules.auth.models import User
 from app.modules.documents.schemas import (
+    DocumentDeleteResponse,
     DocumentRead,
     DocumentsListResponse,
     DocumentUploadResponse,
@@ -58,6 +59,18 @@ async def get_document(
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> DocumentRead:
     return await documents_service.get_document(
+        document_id=document_id,
+        user_id=current_user.id,
+    )
+
+
+@router.delete("/{document_id}", response_model=DocumentDeleteResponse)
+async def delete_document(
+    document_id: UUID,
+    documents_service: Annotated[DocumentsService, Depends(get_documents_service)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> DocumentDeleteResponse:
+    return await documents_service.delete_document(
         document_id=document_id,
         user_id=current_user.id,
     )

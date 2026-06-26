@@ -1,8 +1,9 @@
 from uuid import UUID
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.postgres import async_session_factory
 from app.modules.documents.models import Document
 from app.modules.documents.chunker import split_text_into_chunks
 from app.modules.documents.parser import (
@@ -35,6 +36,7 @@ class DocumentsService:
     async def upload_document(
         self,
         file: UploadFile,
+        background_tasks: BackgroundTasks,
         user_id: UUID | None = None,
     ) -> DocumentUploadResponse:
         self._validate_content_type(file.content_type)
@@ -50,36 +52,11 @@ class DocumentsService:
                 user_id=user_id,
             ),
         )
-        await self.repository.mark_as_processing(document.id)
+        document = await self.repository.mark_as_processing(document.id)
+        await self.session.commit()
+        await self.session.refresh(document)
 
-        try:
-            chunks = self._build_chunks(document, content)
-            await self.elasticsearch_repository.index_document_chunks(chunks)
-            document = await self.repository.mark_as_processed(
-                document.id,
-                chunks_count=len(chunks),
-            )
-            await self.session.commit()
-            await self.session.refresh(document)
-        except (UnsupportedDocumentTypeError, ValueError) as exc:
-            document = await self.repository.mark_as_failed(document.id, str(exc))
-            await self.session.commit()
-            await self.session.refresh(document)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(exc),
-            ) from exc
-        except Exception as exc:
-            document = await self.repository.mark_as_failed(
-                document.id,
-                "Failed to process document",
-            )
-            await self.session.commit()
-            await self.session.refresh(document)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to process document",
-            ) from exc
+        background_tasks.add_task(process_document, document.id, content)
 
         return DocumentUploadResponse(document=document)
 
@@ -198,3 +175,29 @@ class DocumentsService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="File size must not exceed 20 MB",
             )
+
+
+async def process_document(document_id: UUID, content: bytes) -> None:
+    async with async_session_factory() as session:
+        service = DocumentsService(session)
+        document = await service.repository.get_document_by_id(document_id)
+        if document is None:
+            return
+
+        try:
+            chunks = service._build_chunks(document, content)
+            await service.elasticsearch_repository.index_document_chunks(chunks)
+            await service.repository.mark_as_processed(
+                document.id,
+                chunks_count=len(chunks),
+            )
+            await session.commit()
+        except (UnsupportedDocumentTypeError, ValueError) as exc:
+            await service.repository.mark_as_failed(document.id, str(exc))
+            await session.commit()
+        except Exception:
+            await service.repository.mark_as_failed(
+                document.id,
+                "Failed to process document",
+            )
+            await session.commit()

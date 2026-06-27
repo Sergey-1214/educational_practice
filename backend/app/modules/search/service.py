@@ -6,6 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.documents.repository import DocumentsRepository
 from app.modules.history.repository import SearchHistoryRepository
 from app.modules.history.schemas import SearchHistoryCreate
+from app.modules.search.cache_repository import (
+    SearchCacheRepository,
+    build_search_cache_key,
+)
 from app.modules.search.elastic_repository import ElasticsearchRepository
 from app.modules.search.schemas import SearchParams, SearchResponse, SearchResult
 
@@ -16,10 +20,17 @@ class SearchService:
         self.documents_repository = DocumentsRepository(session)
         self.history_repository = SearchHistoryRepository(session)
         self.repository = ElasticsearchRepository()
+        self.cache_repository = SearchCacheRepository()
 
     async def search(self, params: SearchParams, user_id: UUID) -> SearchResponse:
         if params.document_id is not None:
             await self._check_document_access(params.document_id, user_id)
+
+        cache_key = build_search_cache_key(user_id, params)
+        cached_response = await self.cache_repository.get_search_response(cache_key)
+        if cached_response is not None:
+            await self._save_search_history(params, user_id, cached_response.total)
+            return cached_response
 
         try:
             response = await self.repository.search_documents(
@@ -41,17 +52,7 @@ class SearchService:
             self._build_result(hit)
             for hit in hits.get("hits", [])
         ]
-        await self.history_repository.create_history_item(
-            SearchHistoryCreate(
-                user_id=user_id,
-                query=params.query,
-                document_id=params.document_id,
-                results_count=total,
-            ),
-        )
-        await self.session.commit()
-
-        return SearchResponse(
+        search_response = SearchResponse(
             query=params.query,
             document_id=params.document_id,
             items=items,
@@ -59,6 +60,27 @@ class SearchService:
             limit=params.limit,
             offset=params.offset,
         )
+
+        await self.cache_repository.set_search_response(cache_key, search_response)
+        await self._save_search_history(params, user_id, total)
+
+        return search_response
+
+    async def _save_search_history(
+        self,
+        params: SearchParams,
+        user_id: UUID,
+        results_count: int,
+    ) -> None:
+        await self.history_repository.create_history_item(
+            SearchHistoryCreate(
+                user_id=user_id,
+                query=params.query,
+                document_id=params.document_id,
+                results_count=results_count,
+            ),
+        )
+        await self.session.commit()
 
     @staticmethod
     def _extract_total(total: object) -> int:

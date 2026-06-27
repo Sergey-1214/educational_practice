@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
     elasticsearch_url: str = "http://localhost:9200"
     elasticsearch_documents_index: str = "documents"
+    redis_url: str = "redis://localhost:6379/0"
+    search_cache_ttl_seconds: int = 300
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     @property

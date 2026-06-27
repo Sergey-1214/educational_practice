@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import BackgroundTasks, HTTPException, UploadFile, status
@@ -20,11 +21,14 @@ from app.modules.documents.schemas import (
     DocumentsListResponse,
     DocumentUploadResponse,
 )
+from app.modules.search.cache_repository import SearchCacheRepository
 from app.modules.search.elastic_repository import ElasticsearchRepository
 
 
 MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024
 SUPPORTED_CONTENT_TYPES = {PDF_CONTENT_TYPE, DOCX_CONTENT_TYPE}
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentsService:
@@ -32,6 +36,7 @@ class DocumentsService:
         self.session = session
         self.repository = DocumentsRepository(session)
         self.elasticsearch_repository = ElasticsearchRepository()
+        self.search_cache_repository = SearchCacheRepository()
 
     async def upload_document(
         self,
@@ -53,6 +58,12 @@ class DocumentsService:
             ),
         )
         document = await self.repository.mark_as_processing(document.id)
+        if document is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create document",
+            )
+
         await self.session.commit()
         await self.session.refresh(document)
 
@@ -117,6 +128,7 @@ class DocumentsService:
             )
             await self.repository.delete_document(document)
             await self.session.commit()
+            await self.search_cache_repository.delete_user_search_cache(user_id)
         except Exception as exc:
             await self.session.rollback()
             raise HTTPException(
@@ -186,18 +198,59 @@ async def process_document(document_id: UUID, content: bytes) -> None:
 
         try:
             chunks = service._build_chunks(document, content)
+        except (UnsupportedDocumentTypeError, ValueError) as exc:
+            logger.warning(
+                "Document parsing failed for document_id=%s",
+                document_id,
+                exc_info=True,
+            )
+            await service.repository.mark_as_failed(
+                document.id,
+                get_safe_parsing_error_message(exc),
+            )
+            await session.commit()
+            return
+        except Exception:
+            logger.exception("Document parsing failed for document_id=%s", document_id)
+            await service.repository.mark_as_failed(
+                document.id,
+                "Failed to extract text from document",
+            )
+            await session.commit()
+            return
+
+        try:
             await service.elasticsearch_repository.index_document_chunks(chunks)
+        except Exception:
+            logger.exception("Document indexing failed for document_id=%s", document_id)
+            await service.repository.mark_as_failed(
+                document.id,
+                "Failed to index document",
+            )
+            await session.commit()
+            return
+
+        try:
             await service.repository.mark_as_processed(
                 document.id,
                 chunks_count=len(chunks),
             )
             await session.commit()
-        except (UnsupportedDocumentTypeError, ValueError) as exc:
-            await service.repository.mark_as_failed(document.id, str(exc))
-            await session.commit()
+            if document.user_id is not None:
+                await service.search_cache_repository.delete_user_search_cache(
+                    document.user_id,
+                )
         except Exception:
-            await service.repository.mark_as_failed(
-                document.id,
-                "Failed to process document",
+            await session.rollback()
+            logger.exception(
+                "Failed to update document status for document_id=%s",
+                document_id,
             )
-            await session.commit()
+
+
+def get_safe_parsing_error_message(exc: Exception) -> str:
+    if isinstance(exc, UnsupportedDocumentTypeError):
+        return "Only PDF and DOCX files are supported"
+    if str(exc) == "Document does not contain extractable text":
+        return "Document does not contain extractable text"
+    return "Failed to extract text from document"

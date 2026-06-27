@@ -41,3 +41,7 @@ class DocumentUploadResponse(BaseModel):
 class DocumentsListResponse(BaseModel):
     items: list[DocumentRead]
     total: int
+
+
+class DocumentDeleteResponse(BaseModel):
+    deleted: bool

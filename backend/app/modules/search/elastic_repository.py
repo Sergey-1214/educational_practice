@@ -81,3 +81,90 @@ class ElasticsearchRepository:
         response = await self.client.bulk(operations=operations, refresh=True)
         if response.get("errors"):
             raise RuntimeError("Failed to index document chunks")
+
+    async def search_documents(
+        self,
+        query: str,
+        user_id: str,
+        document_id: str | None = None,
+        limit: int = 10,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        await self.ensure_documents_index()
+        return await self.client.search(
+            index=self.index_name,
+            query=self._build_search_query(query, user_id, document_id),
+            highlight={
+                "fields": {
+                    "text": {
+                        "pre_tags": ["<mark>"],
+                        "post_tags": ["</mark>"],
+                    },
+                },
+            },
+            from_=offset,
+            size=limit,
+        )
+
+    async def delete_document_chunks(
+        self,
+        document_id: str,
+        user_id: str,
+    ) -> None:
+        await self.ensure_documents_index()
+        await self.client.delete_by_query(
+            index=self.index_name,
+            query={
+                "bool": {
+                    "filter": [
+                        {
+                            "term": {
+                                "document_id": document_id,
+                            },
+                        },
+                        {
+                            "term": {
+                                "user_id": user_id,
+                            },
+                        },
+                    ],
+                },
+            },
+            refresh=True,
+            conflicts="proceed",
+        )
+
+    @staticmethod
+    def _build_search_query(
+        query: str,
+        user_id: str,
+        document_id: str | None,
+    ) -> dict[str, Any]:
+        text_query = {
+            "multi_match": {
+                "query": query,
+                "fields": ["text"],
+            },
+        }
+        filters: list[dict[str, Any]] = [
+            {
+                "term": {
+                    "user_id": user_id,
+                },
+            },
+        ]
+        if document_id is not None:
+            filters.append(
+                {
+                    "term": {
+                        "document_id": document_id,
+                    },
+                },
+            )
+
+        return {
+            "bool": {
+                "must": [text_query],
+                "filter": filters,
+            },
+        }

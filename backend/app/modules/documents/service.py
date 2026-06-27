@@ -21,6 +21,7 @@ from app.modules.documents.schemas import (
     DocumentsListResponse,
     DocumentUploadResponse,
 )
+from app.modules.search.cache_repository import SearchCacheRepository
 from app.modules.search.elastic_repository import ElasticsearchRepository
 
 
@@ -35,6 +36,7 @@ class DocumentsService:
         self.session = session
         self.repository = DocumentsRepository(session)
         self.elasticsearch_repository = ElasticsearchRepository()
+        self.search_cache_repository = SearchCacheRepository()
 
     async def upload_document(
         self,
@@ -126,6 +128,7 @@ class DocumentsService:
             )
             await self.repository.delete_document(document)
             await self.session.commit()
+            await self.search_cache_repository.delete_user_search_cache(user_id)
         except Exception as exc:
             await self.session.rollback()
             raise HTTPException(
@@ -233,6 +236,10 @@ async def process_document(document_id: UUID, content: bytes) -> None:
                 chunks_count=len(chunks),
             )
             await session.commit()
+            if document.user_id is not None:
+                await service.search_cache_repository.delete_user_search_cache(
+                    document.user_id,
+                )
         except Exception:
             await session.rollback()
             logger.exception(

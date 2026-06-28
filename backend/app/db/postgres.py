@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -33,9 +34,17 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def create_tables() -> None:
+async def create_tables(max_attempts: int = 30, delay_seconds: int = 2) -> None:
     import app.modules.auth.models  # noqa: F401
     import app.modules.documents.models  # noqa: F401
+    import app.modules.history.models  # noqa: F401
 
-    async with engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(Base.metadata.create_all)
+            return
+        except Exception:
+            if attempt == max_attempts:
+                raise
+            await asyncio.sleep(delay_seconds)

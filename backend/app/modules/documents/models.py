@@ -38,7 +38,11 @@ class Document(Base):
     content_type: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(Integer)
     status: Mapped[DocumentStatus] = mapped_column(
-        Enum(DocumentStatus, name="document_status"),
+        Enum(
+            DocumentStatus,
+            name="document_status",
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
         default=DocumentStatus.UPLOADED,
         server_default=DocumentStatus.UPLOADED.value,
     )

@@ -11,6 +11,7 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
+from app.modules.auth.models import User
 from app.modules.auth.repository import AuthRepository
 from app.modules.auth.schemas import (
     LoginRequest,
@@ -72,13 +73,23 @@ class AuthService:
         await self.session.commit()
         return token_response
 
-    async def refresh_token(self, data: RefreshTokenRequest) -> TokenResponse:
+    async def refresh_token(
+        self,
+        data: RefreshTokenRequest,
+        current_user: User,
+    ) -> TokenResponse:
         token_hash = hash_token(data.refresh_token)
         refresh_token = await self.repository.get_active_refresh_token(token_hash)
         if refresh_token is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token",
+            )
+
+        if refresh_token.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this refresh token",
             )
 
         user = await self.repository.get_user_by_id(refresh_token.user_id)
@@ -93,9 +104,22 @@ class AuthService:
         await self.session.commit()
         return token_response
 
-    async def logout(self, data: LogoutRequest) -> LogoutResponse:
+    async def logout(
+        self,
+        data: LogoutRequest,
+        current_user: User,
+    ) -> LogoutResponse:
         token_hash = hash_token(data.refresh_token)
-        await self.repository.revoke_refresh_token(token_hash)
+        refresh_token = await self.repository.get_refresh_token_by_hash(token_hash)
+        if refresh_token is not None and refresh_token.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this refresh token",
+            )
+
+        if refresh_token is not None:
+            await self.repository.revoke_refresh_token(token_hash)
+
         await self.session.commit()
         return LogoutResponse()
 

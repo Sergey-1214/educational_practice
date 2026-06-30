@@ -7,6 +7,10 @@ on:
       - dev
     paths:
       - "backend/**"
+      - "docker-compose.yml"
+      - "monitoring/**"
+      - ".env.example"
+      - "init.sh"
       - ".github/workflows/backend-ci.yml"
   pull_request:
     branches:
@@ -14,6 +18,10 @@ on:
       - dev
     paths:
       - "backend/**"
+      - "docker-compose.yml"
+      - "monitoring/**"
+      - ".env.example"
+      - "init.sh"
       - ".github/workflows/backend-ci.yml"
 
 jobs:
@@ -46,3 +54,13 @@ jobs:
 
       - name: Build backend image
         run: docker build -t educational-practice-backend .
+
+  compose-config:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate docker compose configuration
+        run: docker compose config

@@ -20,12 +20,51 @@ http://localhost:8000/health
 Copy-Item backend/.env.example backend/.env
 ```
 
+4. Optional: copy the root example if you want to override Docker Compose variables from a root `.env` file:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 ## Services
 
 - Backend API: `http://localhost:8000`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 - Elasticsearch: `http://localhost:9200`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+
+## Helpful commands
+
+```powershell
+docker compose down
+docker compose down -v
+docker compose logs -f backend
+docker compose up --build
+```
+
+## Monitoring
+
+- Metrics endpoint: `http://localhost:8000/metrics`
+- Prometheus scrapes the backend automatically.
+- Grafana starts with a preconfigured Prometheus datasource and a `Backend Overview` dashboard.
+- Default Grafana credentials come from `.env.example`: `admin` / `admin`
+
+## CI
+
+- GitHub Actions validates backend linting, tests, backend image build, and `docker compose config`.
+- Workflow file: `.github/workflows/backend-ci.yml`
+
+## Demo initialization
+
+- `init.sh` waits for the backend, registers a demo user, logs in, downloads 10 public PDF files, and uploads them through the API.
+- Example usage:
+
+```bash
+chmod +x init.sh
+./init.sh
+```
 
 ## Notes
 
@@ -34,3 +73,4 @@ Copy-Item backend/.env.example backend/.env
 - The backend reads configuration from environment variables and supports `DATABASE_URL`.
 - For production, it is better to switch table creation to Alembic migrations instead of startup auto-create.
 - GitHub Actions runs backend linting, tests, and image build for changes in `backend/**` on `master` and `dev`.
+- The frontend part from the assignment is still blocked by the absence of a `frontend/` directory in the repository.

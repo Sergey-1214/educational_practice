@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.metrics import setup_metrics
 from app.db.elasticsearch import close_elasticsearch
 from app.db.postgres import create_tables
 from app.db.redis import close_redis
@@ -32,6 +33,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+setup_metrics(app)
 
 app.include_router(api_router)
 

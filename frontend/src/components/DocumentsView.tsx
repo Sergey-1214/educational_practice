@@ -1,0 +1,9 @@
+import type { DocumentItem, UploadItem } from '../types'
+import { Icon } from './Icon'
+import { UploadZone } from './UploadZone'
+const statusMap = { uploaded: 'Загружен', processing: 'Индексация', processed: 'Готов', failed: 'Ошибка' }
+const date = (v: string) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(v))
+const size = (b: number) => b < 1e6 ? `${Math.round(b / 1024)} КБ` : `${(b / 1e6).toFixed(1)} МБ`
+export function DocumentsView({ documents, uploads, onFiles, onDelete, onSelect }: { documents: DocumentItem[]; uploads: UploadItem[]; onFiles: (files: File[]) => void; onDelete: (id: string) => void; onSelect: (doc: DocumentItem) => void }) {
+  return <section className="view"><header className="view-title"><div><span className="section-index">02 / материалы</span><h1>Ваша библиотека</h1></div><p>{documents.length} документов в базе знаний</p></header><div className="documents-layout"><div><UploadZone uploads={uploads} onFiles={onFiles}/></div><div className="docs-list"><div className="list-caption"><span>Последние документы</span><span>Статус</span></div>{documents.length === 0 ? <div className="empty compact"><Icon name="file" size={40}/><h3>Библиотека пока пуста</h3><p>Загрузите первый материал — он появится здесь.</p></div> : documents.map(doc => <article className="doc-row" key={doc.id} onClick={() => onSelect(doc)}><span className={`file-tile ${doc.content_type.includes('pdf') ? 'pdf' : 'docx'}`}>{doc.content_type.includes('pdf') ? 'PDF' : 'DOC'}</span><div className="doc-main"><strong>{doc.file_name}</strong><span>{date(doc.created_at)} · {size(doc.size_bytes)} · {doc.chunks_count} фрагм.</span></div><span className={`status ${doc.status}`}><i/>{statusMap[doc.status]}</span><button className="icon-button danger" title="Удалить документ" onClick={e => { e.stopPropagation(); onDelete(doc.id) }}><Icon name="trash" size={19}/></button></article>)}</div></div></section>
+}

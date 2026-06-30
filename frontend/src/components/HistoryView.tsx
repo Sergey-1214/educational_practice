@@ -1,0 +1,7 @@
+import type { HistoryItem } from '../types'
+import { Icon } from './Icon'
+
+const date = (value: string) => new Intl.DateTimeFormat('ru', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+export function HistoryView({ items, onRepeat, onDelete, onClear }: { items: HistoryItem[]; onRepeat: (item: HistoryItem) => void; onDelete: (id: string) => void; onClear: () => void }) {
+  return <section className="view narrow"><header className="view-title"><div><span className="section-index">03 / история</span><h1>Следы поиска</h1></div>{items.length > 0 && <button className="outline danger" onClick={onClear}><Icon name="trash" size={17}/>Очистить всё</button>}</header>{items.length === 0 ? <div className="empty"><span className="empty-orbit"><Icon name="history" size={42}/></span><h3>Здесь появится история</h3><p>Ваши поисковые запросы будут собраны в одном месте.</p></div> : <div className="history-list">{items.map((item, index) => <article key={item.id}><span className="history-num">{String(index + 1).padStart(2, '0')}</span><button className="history-query" onClick={() => onRepeat(item)}><strong>{item.query}</strong><small>{date(item.created_at)} · найдено {item.results_count}</small></button><Icon name="chevron"/><button className="icon-button danger" title="Удалить из истории" onClick={() => onDelete(item.id)}><Icon name="trash" size={18}/></button></article>)}</div>}</section>
+}

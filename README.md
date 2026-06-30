@@ -14,6 +14,8 @@ docker compose up --build
 http://localhost:8000/health
 ```
 
+Open the web interface at `http://localhost:5173`. Register an account, upload PDF/DOCX files, wait for indexing, and search across the library.
+
 3. Optional: create `backend/.env` from the example if you want to run the backend outside Docker or override defaults:
 
 ```powershell
@@ -29,6 +31,7 @@ Copy-Item .env.example .env
 ## Services
 
 - Backend API: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
 - PostgreSQL: `localhost:5432`
 - Redis: `localhost:6379`
 - Elasticsearch: `http://localhost:9200`
@@ -74,4 +77,4 @@ chmod +x init.sh
 - The backend reads configuration from environment variables and supports `DATABASE_URL`.
 - For production, it is better to switch table creation to Alembic migrations instead of startup auto-create.
 - GitHub Actions runs backend linting, tests, and image build for changes in `backend/**` on `master` and `dev`.
-- The frontend part from the assignment is still blocked by the absence of a `frontend/` directory in the repository.
+- The React/TypeScript frontend is built as a multi-stage image and served by Nginx on port `5173`.

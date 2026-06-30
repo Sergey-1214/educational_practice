@@ -53,9 +53,12 @@ class SearchHistoryService:
 
     async def delete_history_item(
         self,
-        history_item_id: UUID,
+        history_item_id: UUID | str,
         user_id: UUID,
     ) -> SearchHistoryDeleteResponse:
+        if isinstance(history_item_id, str):
+            history_item_id = UUID(history_item_id)
+
         deleted = await self.repository.delete_history_item(
             history_item_id=history_item_id,
             user_id=user_id,

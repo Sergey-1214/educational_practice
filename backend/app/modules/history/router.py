@@ -79,7 +79,7 @@ async def delete_history_item(
     history_service: Annotated[SearchHistoryService, Depends(get_history_service)],
 ) -> SearchHistoryDeleteResponse:
     return await history_service.delete_history_item(
-        history_item_id=history_item_id,
+        history_item_id=str(history_item_id),
         user_id=current_user.id,
     )
 

@@ -69,5 +69,5 @@ async def search_documents(
             limit=limit,
             offset=offset,
         ),
-        user_id=current_user.id,
+        current_user.id,
     )

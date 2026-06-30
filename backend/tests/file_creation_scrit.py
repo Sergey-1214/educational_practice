@@ -1,6 +1,5 @@
 # script for creating test documents to work with
 
-import os
 import csv
 from pathlib import Path
 
@@ -474,7 +473,7 @@ create_valid_docx("french_conjugation.docx", docx_content_3)
 
 def create_empty_pdf():
     filepath = INVALID_DIR / "empty.pdf"
-    with open(filepath, 'wb') as f:
+    with open(filepath, 'wb'):
         pass
     print(f"OK: {filepath}")
 
@@ -595,7 +594,7 @@ pdf_files = list(PDF_DIR.glob("*.pdf"))
 docx_files = list(DOCX_DIR.glob("*.docx"))
 invalid_files = list(INVALID_DIR.glob("*"))
 
-print(f"\nStatistics:")
+print("\nStatistics:")
 print(f"   Valid PDF: {len(pdf_files)}")
 print(f"   Valid DOCX: {len(docx_files)}")
 print(f"   Invalid files: {len(invalid_files)}")

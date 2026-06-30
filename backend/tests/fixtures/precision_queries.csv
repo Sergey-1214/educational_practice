@@ -1,0 +1,11 @@
+query,expected_file,expected_chunk_text
+grammaire,french_grammar.pdf,grammaire franaise
+conjugaison,french_conjugation.docx,rgles de conjugaison
+civilisation,french_civilization.pdf,civilisation franaise
+culture,french_culture.pdf,culture franaise
+verbe,french_grammar.pdf,verbes sont conjugus
+subjonctif,french_conjugation.docx,Le subjonctif
+gastronomie,french_civilization.pdf,gastronomie franaise
+littrature,french_culture.pdf,littrature franaise
+apprentissage,french_language_learning.docx,apprentissage du franais
+francophonie,french_culture.pdf,francophonie

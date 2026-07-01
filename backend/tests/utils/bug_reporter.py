@@ -1,14 +1,14 @@
 import json
+import sys
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import sys
+from typing import Any
 
 
 class BugReport:
-    """Класс для создания структурированных баг-репортов"""
-    
+    """Utility object for saving structured test failure reports."""
+
     def __init__(self, title: str, module: str = "unknown"):
         self.title = title
         self.module = module
@@ -23,129 +23,134 @@ class BugReport:
             "actual_behavior": "",
             "test_data": "",
             "stack_trace": "",
-            "environment": self._get_environment()
+            "environment": self._get_environment(),
         }
-    
-    def _get_environment(self) -> Dict[str, str]:
-        """Получить информацию об окружении"""
+
+    def _get_environment(self) -> dict[str, str]:
         import platform
-        
+
         env = {
             "os": platform.system(),
             "os_version": platform.version(),
             "python_version": sys.version.split()[0],
-            "platform": platform.platform()
+            "platform": platform.platform(),
         }
-        
-        # Попытка получить версии библиотек
+
         try:
             import fastapi
+
             env["fastapi_version"] = fastapi.__version__
-        except:
+        except Exception:
             pass
-        
+
         try:
             import pydantic
+
             env["pydantic_version"] = pydantic.__version__
-        except:
+        except Exception:
             pass
-        
+
         try:
             import sqlalchemy
+
             env["sqlalchemy_version"] = sqlalchemy.__version__
-        except:
+        except Exception:
             pass
-        
+
         return env
-    
-    def set_description(self, description: str) -> 'BugReport':
+
+    def set_description(self, description: str) -> "BugReport":
         self.data["description"] = description
         return self
-    
-    def add_step(self, step: str) -> 'BugReport':
+
+    def add_step(self, step: str) -> "BugReport":
         self.data["steps_to_reproduce"].append(step)
         return self
-    
-    def set_expected(self, expected: str) -> 'BugReport':
+
+    def set_expected(self, expected: str) -> "BugReport":
         self.data["expected_behavior"] = expected
         return self
-    
-    def set_actual(self, actual: str) -> 'BugReport':
+
+    def set_actual(self, actual: str) -> "BugReport":
         self.data["actual_behavior"] = actual
         return self
-    
-    def set_test_data(self, data: Any) -> 'BugReport':
+
+    def set_test_data(self, data: Any) -> "BugReport":
         if isinstance(data, (dict, list)):
             self.data["test_data"] = json.dumps(data, indent=2, default=str)
         else:
             self.data["test_data"] = str(data)
         return self
-    
-    def set_stack_trace(self, exc_info=None) -> 'BugReport':
+
+    def set_stack_trace(self, exc_info=None) -> "BugReport":
         if exc_info:
             self.data["stack_trace"] = "".join(traceback.format_exception(*exc_info))
         else:
             self.data["stack_trace"] = traceback.format_exc()
         return self
-    
+
     def save_markdown(self, directory: str = "bug_reports") -> str:
-        """Сохранить отчет в формате Markdown"""
         report_dir = Path(directory)
         report_dir.mkdir(exist_ok=True)
-        
+
         timestamp = self.timestamp.strftime("%Y%m%d_%H%M%S")
-        safe_title = "".join(c for c in self.title if c.isalnum() or c in " _-")[:50]
+        safe_title = "".join(
+            char for char in self.title if char.isalnum() or char in " _-"
+        )[:50]
         filename = f"{timestamp}_{self.module}_{safe_title}.md"
         filepath = report_dir / filename
-        
-        md = []
-        md.append(f"# Баг-репорт: {self.title}")
-        md.append("")
-        md.append(f"**Модуль:** {self.module}")
-        md.append(f"**Время:** {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
-        md.append("")
-        
+
+        md: list[str] = [
+            f"# Bug Report: {self.title}",
+            "",
+            f"**Module:** {self.module}",
+            f"**Time:** {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+        ]
+
         if self.data["description"]:
-            md.append("## Описание")
-            md.append(self.data["description"])
-            md.append("")
-        
+            md.extend(["## Description", self.data["description"], ""])
+
         if self.data["steps_to_reproduce"]:
-            md.append("## Шаги воспроизведения")
-            for i, step in enumerate(self.data["steps_to_reproduce"], 1):
-                md.append(f"{i}. {step}")
+            md.append("## Steps To Reproduce")
+            for index, step in enumerate(self.data["steps_to_reproduce"], start=1):
+                md.append(f"{index}. {step}")
             md.append("")
-        
+
         if self.data["expected_behavior"]:
-            md.append("## Ожидаемое поведение")
-            md.append(self.data["expected_behavior"])
-            md.append("")
-        
+            md.extend(["## Expected Behavior", self.data["expected_behavior"], ""])
+
         if self.data["actual_behavior"]:
-            md.append("## Фактическое поведение")
-            md.append(self.data["actual_behavior"])
-            md.append("")
-        
+            md.extend(["## Actual Behavior", self.data["actual_behavior"], ""])
+
         if self.data["test_data"]:
-            md.append("## Тестовые данные")
-            md.append("```")
-            md.append(self.data["test_data"][:1000])  # Ограничение для читаемости
-            md.append("```")
-            md.append("")
-        
+            md.extend(
+                [
+                    "## Test Data",
+                    "```",
+                    self.data["test_data"][:1000],
+                    "```",
+                    "",
+                ]
+            )
+
         if self.data["stack_trace"]:
-            md.append("## Стек-трейс")
-            md.append("```python")
-            md.append(self.data["stack_trace"])
-            md.append("```")
-            md.append("")
-        
+            md.extend(
+                [
+                    "## Stack Trace",
+                    "```python",
+                    self.data["stack_trace"],
+                    "```",
+                    "",
+                ]
+            )
+
         if self.data["environment"]:
-            md.append("## Окружение")
+            md.append("## Environment")
             for key, value in self.data["environment"].items():
                 md.append(f"- **{key}:** {value}")
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write("\n".join(md))
-        
+
+        with open(filepath, "w", encoding="utf-8") as file:
+            file.write("\n".join(md))
+
         return str(filepath)

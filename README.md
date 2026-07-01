@@ -2,16 +2,17 @@
 
 ## Quick start
 
-1. Start the local infrastructure and API:
+1. Start the full local stack:
 
 ```powershell
 docker compose up --build
 ```
 
-2. Check that the backend is healthy:
+2. Check that the main services are available:
 
 ```text
 http://localhost:8000/health
+http://localhost:5173
 ```
 
 Open the web interface at `http://localhost:5173`. Register an account, upload PDF/DOCX files, wait for indexing, and search across the library.
@@ -44,6 +45,7 @@ Copy-Item .env.example .env
 docker compose down
 docker compose down -v
 docker compose logs -f backend
+docker compose logs -f frontend
 docker compose up --build
 ```
 
@@ -56,7 +58,7 @@ docker compose up --build
 
 ## CI
 
-- GitHub Actions validates backend linting, tests, backend image build, and `docker compose config`.
+- GitHub Actions validates backend linting, backend tests, frontend build, both Docker image builds, and `docker compose config`.
 - The CI workflow starts a dedicated PostgreSQL service for backend tests, because FastAPI startup initializes database tables during the test run.
 - Workflow file: `.github/workflows/backend-ci.yml`
 
@@ -76,5 +78,5 @@ chmod +x init.sh
 - The FastAPI app creates database tables on startup in the current implementation.
 - The backend reads configuration from environment variables and supports `DATABASE_URL`.
 - For production, it is better to switch table creation to Alembic migrations instead of startup auto-create.
-- GitHub Actions runs backend linting, tests, and image build for changes in `backend/**` on `master` and `dev`.
+- GitHub Actions runs backend and frontend checks for changes in `backend/**`, `frontend/**`, and infrastructure files on `master` and `dev`.
 - The React/TypeScript frontend is built as a multi-stage image and served by Nginx on port `5173`.

@@ -7,6 +7,28 @@ EMAIL="${INIT_USER_EMAIL:-devops-demo@example.com}"
 PASSWORD="${INIT_USER_PASSWORD:-devops-demo-password}"
 DOWNLOAD_DIR="${DOWNLOAD_DIR:-.tmp/init-docs}"
 
+resolve_python() {
+  if command -v python >/dev/null 2>&1; then
+    echo "python"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    echo "python3"
+    return 0
+  fi
+
+  if command -v py >/dev/null 2>&1; then
+    echo "py"
+    return 0
+  fi
+
+  echo "Python interpreter not found. Install python or make 'py' available in PATH." >&2
+  return 1
+}
+
+PYTHON_BIN="$(resolve_python)"
+
 PDF_URLS=(
   "https://arxiv.org/pdf/1706.03762.pdf"
   "https://arxiv.org/pdf/1409.0473.pdf"
@@ -63,7 +85,7 @@ login_user() {
     -d "${payload}"
 
   ACCESS_TOKEN=$(
-    python -c "import json; print(json.load(open('/tmp/init-login-response.json', encoding='utf-8'))['access_token'])"
+    "${PYTHON_BIN}" -c "import json; print(json.load(open('/tmp/init-login-response.json', encoding='utf-8'))['access_token'])"
   )
 }
 

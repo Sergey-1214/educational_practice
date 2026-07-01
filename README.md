@@ -60,7 +60,7 @@ docker compose up --build
 
 - GitHub Actions validates backend linting, backend tests, frontend build, both Docker image builds, and `docker compose config`.
 - The CI workflow starts a dedicated PostgreSQL service for backend tests, because FastAPI startup initializes database tables during the test run.
-- Workflow file: `.github/workflows/backend-ci.yml`
+- Workflow file: `.github/workflows/ci.yml`
 
 ## Demo initialization
 

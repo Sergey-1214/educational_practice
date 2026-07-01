@@ -12,7 +12,7 @@ on:
       - "monitoring/**"
       - ".env.example"
       - "init.sh"
-      - ".github/workflows/backend-ci.yml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches:
       - master
@@ -24,7 +24,7 @@ on:
       - "monitoring/**"
       - ".env.example"
       - "init.sh"
-      - ".github/workflows/backend-ci.yml"
+      - ".github/workflows/ci.yml"
 
 jobs:
   backend-lint-and-test:

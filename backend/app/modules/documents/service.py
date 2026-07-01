@@ -172,7 +172,7 @@ class DocumentsService:
         if content_type not in SUPPORTED_CONTENT_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only PDF and DOCX files are supported",
+                detail="Unsupported file type. Only PDF and DOCX files are supported",
             )
 
     @staticmethod
@@ -185,7 +185,7 @@ class DocumentsService:
         if len(content) > MAX_DOCUMENT_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File size must not exceed 20 MB",
+                detail="File exceeds 20 MB limit",
             )
 
 

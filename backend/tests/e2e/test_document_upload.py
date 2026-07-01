@@ -1,12 +1,10 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import status
 from io import BytesIO
 from datetime import datetime
 from uuid import uuid4
-import time
 
 import sys
 from pathlib import Path
@@ -67,21 +65,8 @@ class TestDocumentUploadE2E:
         """Test successful PDF upload"""
         client, mock_user, mock_session = authenticated_client
         
-        # Create a mock document response
         document_id = uuid4()
-        mock_document = {
-            "id": str(document_id),
-            "user_id": str(mock_user.id),
-            "file_name": "test_document.pdf",
-            "content_type": "application/pdf",
-            "size_bytes": 1024,
-            "status": DocumentStatus.UPLOADED.value,
-            "chunks_count": 0,
-            "error_message": None,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-        
+
         # Mock the DocumentsService
         with patch("app.modules.documents.router.DocumentsService") as MockService:
             mock_service = AsyncMock()
